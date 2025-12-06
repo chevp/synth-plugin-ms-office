@@ -10,6 +10,26 @@
     "name": "Synth",
     "url": "https://github.com/chevp"
   },
+  "protocol": {
+    "handler": "office",
+    "class": "synth.msoffice.OfficeHandler",
+    "routes": [
+      {
+        "path": "open",
+        "description": "Open a document in Microsoft Office",
+        "params": ["docId", "filePath", "fileName", "token"]
+      },
+      {
+        "path": "formats",
+        "description": "List supported file formats"
+      }
+    ],
+    "examples": [
+      "synth://office/open?docId=123&token=xyz",
+      "synth://office/open?filePath=C:/docs/report.docx",
+      "synth://office/formats"
+    ]
+  },
   "mcp": {
     "transport": "stdio",
     "command": "java",
@@ -29,7 +49,7 @@
       },
       {
         "name": "office_register_protocol",
-        "description": "Register the synth-office:// custom URL protocol handler"
+        "description": "Check synth:// protocol status (registration handled by central host app)"
       }
     ]
   },

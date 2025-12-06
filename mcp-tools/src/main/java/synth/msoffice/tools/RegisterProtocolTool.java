@@ -1,19 +1,28 @@
 package synth.msoffice.tools;
 
-import java.io.*;
 import java.nio.file.*;
 import java.util.*;
 
 /**
- * Registers the synth-office:// custom URL protocol handler.
- * This enables opening documents directly from web browsers via custom URLs.
+ * Information about the synth:// protocol handler for Microsoft Office.
  *
- * URL format: synth-office://open?docId=123&token=xyz
+ * IMPORTANT: This plugin does NOT register its own protocol.
+ * The unified synth:// protocol is registered by the central Synth host app
+ * (synth-platform-console or similar).
+ *
+ * This tool provides information about how to use the Office handler
+ * and checks if the central protocol is registered.
+ *
+ * URL format: synth://office/open?docId=123&token=xyz
+ *
+ * The central synth:// handler routes to plugins based on path:
+ *   synth://blender/*  -> BlenderHandler
+ *   synth://office/*   -> OfficeHandler
+ *   synth://server/*   -> ServerHandler
  */
 public class RegisterProtocolTool {
 
-    private static final String PROTOCOL_NAME = "synth-office";
-    private static final Path HANDLER_DIR = Path.of(System.getProperty("user.home"), ".synth", "protocol-handler");
+    private static final String PROTOCOL_NAME = "synth";
 
     public Map<String, Object> getToolDefinition() {
         Map<String, Object> inputSchema = new LinkedHashMap<>();
@@ -23,147 +32,28 @@ public class RegisterProtocolTool {
 
         Map<String, Object> action = new LinkedHashMap<>();
         action.put("type", "string");
-        action.put("enum", Arrays.asList("register", "unregister", "status"));
-        action.put("description", "Action to perform: register, unregister, or check status");
+        action.put("enum", Arrays.asList("status", "info"));
+        action.put("description", "Action: 'status' to check if synth:// is registered, 'info' for usage information");
         properties.put("action", action);
-
-        Map<String, Object> serverUrl = new LinkedHashMap<>();
-        serverUrl.put("type", "string");
-        serverUrl.put("description", "Base URL of synth-platform-web server (for document fetch)");
-        properties.put("serverUrl", serverUrl);
 
         inputSchema.put("properties", properties);
         inputSchema.put("required", Collections.singletonList("action"));
 
         Map<String, Object> definition = new LinkedHashMap<>();
         definition.put("name", "office_register_protocol");
-        definition.put("description", "Register/unregister the synth-office:// custom URL protocol handler for browser integration.");
+        definition.put("description", "Check synth:// protocol status and get usage info. Note: Registration is handled by the central Synth host app.");
         definition.put("inputSchema", inputSchema);
         return definition;
     }
 
     public String execute(Map<String, Object> arguments) throws Exception {
-        String action = (String) arguments.get("action");
-        String serverUrl = (String) arguments.getOrDefault("serverUrl", "http://localhost:4200");
+        String action = (String) arguments.getOrDefault("action", "info");
 
         return switch (action) {
-            case "register" -> registerProtocol(serverUrl);
-            case "unregister" -> unregisterProtocol();
             case "status" -> checkStatus();
-            default -> throw new IllegalArgumentException("Invalid action: " + action);
+            case "info" -> getInfo();
+            default -> getInfo();
         };
-    }
-
-    private String registerProtocol(String serverUrl) throws Exception {
-        String os = System.getProperty("os.name").toLowerCase();
-
-        if (os.contains("win")) {
-            return registerWindowsProtocol(serverUrl);
-        } else if (os.contains("mac")) {
-            return "macOS protocol registration requires manual setup. See documentation.";
-        } else {
-            return registerLinuxProtocol(serverUrl);
-        }
-    }
-
-    private String registerWindowsProtocol(String serverUrl) throws Exception {
-        // Create handler script
-        Files.createDirectories(HANDLER_DIR);
-        Path handlerScript = HANDLER_DIR.resolve("synth-office-handler.bat");
-
-        String jarPath = getJarPath();
-        String scriptContent = String.format("""
-            @echo off
-            setlocal
-            set URL=%%1
-            java -cp "%s" synth.msoffice.ProtocolHandler "%%URL%%" "%s"
-            """, jarPath, serverUrl);
-
-        Files.writeString(handlerScript, scriptContent);
-
-        // Create registry file
-        Path regFile = HANDLER_DIR.resolve("register-protocol.reg");
-        String handlerPath = handlerScript.toString().replace("\\", "\\\\");
-
-        String regContent = String.format("""
-            Windows Registry Editor Version 5.00
-
-            [HKEY_CURRENT_USER\\Software\\Classes\\%s]
-            @="URL:Synth Office Protocol"
-            "URL Protocol"=""
-
-            [HKEY_CURRENT_USER\\Software\\Classes\\%s\\shell]
-
-            [HKEY_CURRENT_USER\\Software\\Classes\\%s\\shell\\open]
-
-            [HKEY_CURRENT_USER\\Software\\Classes\\%s\\shell\\open\\command]
-            @="\\"%s\\" \\"%%1\\""
-            """, PROTOCOL_NAME, PROTOCOL_NAME, PROTOCOL_NAME, PROTOCOL_NAME, handlerPath);
-
-        Files.writeString(regFile, regContent);
-
-        // Apply registry
-        ProcessBuilder pb = new ProcessBuilder("reg", "import", regFile.toString());
-        Process process = pb.start();
-        int exitCode = process.waitFor();
-
-        if (exitCode == 0) {
-            return String.format("""
-                Protocol handler registered successfully!
-
-                Protocol: %s://
-                Handler: %s
-                Server: %s
-
-                You can now use URLs like:
-                  %s://open?docId=123
-
-                To open documents directly from the browser.
-                """, PROTOCOL_NAME, handlerScript, serverUrl, PROTOCOL_NAME);
-        } else {
-            return "Failed to register protocol. Please run as administrator or import registry file manually:\n" + regFile;
-        }
-    }
-
-    private String registerLinuxProtocol(String serverUrl) throws Exception {
-        Files.createDirectories(HANDLER_DIR);
-
-        // Create desktop entry
-        Path desktopEntry = Path.of(System.getProperty("user.home"), ".local", "share", "applications", "synth-office-handler.desktop");
-        Files.createDirectories(desktopEntry.getParent());
-
-        String jarPath = getJarPath();
-        String desktopContent = String.format("""
-            [Desktop Entry]
-            Type=Application
-            Name=Synth Office Handler
-            Exec=java -cp %s synth.msoffice.ProtocolHandler %%u %s
-            StartupNotify=false
-            MimeType=x-scheme-handler/%s;
-            NoDisplay=true
-            """, jarPath, serverUrl, PROTOCOL_NAME);
-
-        Files.writeString(desktopEntry, desktopContent);
-
-        // Register with xdg-mime
-        ProcessBuilder pb = new ProcessBuilder("xdg-mime", "default", "synth-office-handler.desktop", "x-scheme-handler/" + PROTOCOL_NAME);
-        pb.start().waitFor();
-
-        return String.format("Protocol handler registered for Linux.\nDesktop entry: %s", desktopEntry);
-    }
-
-    private String unregisterProtocol() throws Exception {
-        String os = System.getProperty("os.name").toLowerCase();
-
-        if (os.contains("win")) {
-            ProcessBuilder pb = new ProcessBuilder("reg", "delete", "HKCU\\Software\\Classes\\" + PROTOCOL_NAME, "/f");
-            pb.start().waitFor();
-            return "Protocol handler unregistered.";
-        } else {
-            Path desktopEntry = Path.of(System.getProperty("user.home"), ".local", "share", "applications", "synth-office-handler.desktop");
-            Files.deleteIfExists(desktopEntry);
-            return "Protocol handler unregistered.";
-        }
     }
 
     private String checkStatus() {
@@ -174,23 +64,84 @@ public class RegisterProtocolTool {
                 ProcessBuilder pb = new ProcessBuilder("reg", "query", "HKCU\\Software\\Classes\\" + PROTOCOL_NAME);
                 Process process = pb.start();
                 int exitCode = process.waitFor();
-                return exitCode == 0 ? "Protocol handler is registered." : "Protocol handler is NOT registered.";
+
+                if (exitCode == 0) {
+                    return """
+                        synth:// protocol is REGISTERED.
+
+                        You can use URLs like:
+                          synth://office/open?docId=123&token=xyz
+                          synth://office/open?filePath=C:/docs/report.docx
+
+                        The central Synth handler will route to this plugin.
+                        """;
+                } else {
+                    return """
+                        synth:// protocol is NOT registered.
+
+                        The synth:// protocol must be registered by the central Synth host app.
+                        Please start synth-platform-console or run the Synth installer.
+
+                        Once registered, you can use:
+                          synth://office/open?docId=123
+                        """;
+                }
             } catch (Exception e) {
                 return "Could not check status: " + e.getMessage();
             }
+        } else if (os.contains("mac")) {
+            return "macOS: Check if Synth.app is installed and associated with synth:// URLs.";
         } else {
-            Path desktopEntry = Path.of(System.getProperty("user.home"), ".local", "share", "applications", "synth-office-handler.desktop");
-            return Files.exists(desktopEntry) ? "Protocol handler is registered." : "Protocol handler is NOT registered.";
+            try {
+                Path desktopEntry = Path.of(
+                    System.getProperty("user.home"),
+                    ".local", "share", "applications", "synth-handler.desktop"
+                );
+                if (Files.exists(desktopEntry)) {
+                    return "synth:// protocol is REGISTERED (Linux desktop entry found).";
+                } else {
+                    return "synth:// protocol is NOT registered. Install the Synth desktop handler.";
+                }
+            } catch (Exception e) {
+                return "Could not check status: " + e.getMessage();
+            }
         }
     }
 
-    private String getJarPath() {
-        // Try to find the JAR file path
-        String classPath = System.getProperty("java.class.path");
-        if (classPath.endsWith(".jar")) {
-            return classPath;
-        }
-        // Fallback to expected location
-        return "synth-ms-office-1.0.0.jar";
+    private String getInfo() {
+        return """
+            Microsoft Office Integration - synth:// Protocol Handler
+
+            This plugin handles routes under synth://office/*
+
+            SUPPORTED URLS:
+              synth://office/open?docId=123&token=xyz
+                - Opens a document from the Synth server in Office
+
+              synth://office/open?filePath=/path/to/document.docx
+                - Opens a local file in Office
+
+              synth://office/formats
+                - Lists supported file formats
+
+            SUPPORTED FORMATS:
+              Word:       .docx, .doc
+              Excel:      .xlsx, .xls
+              PowerPoint: .pptx, .ppt
+
+            PROTOCOL REGISTRATION:
+              The unified synth:// protocol is registered by the central
+              Synth host application (synth-platform-console).
+
+              This plugin provides an OfficeHandler class that the central
+              router calls when synth://office/* URLs are invoked.
+
+            HANDLER CLASS:
+              synth.msoffice.OfficeHandler
+
+            EXAMPLE INTEGRATION:
+              OfficeHandler handler = new OfficeHandler();
+              handler.handle("open", params, serverUrl);
+            """;
     }
 }
