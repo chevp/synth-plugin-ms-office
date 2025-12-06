@@ -1,0 +1,52 @@
+{
+  "id": "synth.ms-office",
+  "name": "Microsoft Office Integration",
+  "version": "1.0.0",
+  "apiVersion": 1,
+  "description": "Open and edit Word, Excel, and PowerPoint documents directly with Microsoft Office. Supports Base64 documents from SQLite database.",
+  "category": "Productivity",
+  "icon": "description",
+  "vendor": {
+    "name": "Synth",
+    "url": "https://github.com/chevp"
+  },
+  "mcp": {
+    "transport": "stdio",
+    "command": "java",
+    "args": ["-jar", "mcp-tools/target/synth-ms-office-1.0.0.jar"],
+    "tools": [
+      {
+        "name": "office_open_document",
+        "description": "Open a document with Microsoft Office (Word, Excel, or PowerPoint)"
+      },
+      {
+        "name": "office_save_document",
+        "description": "Save document changes back to Base64 for database storage"
+      },
+      {
+        "name": "office_list_recent",
+        "description": "List recently opened documents with their sync status"
+      },
+      {
+        "name": "office_register_protocol",
+        "description": "Register the synth-office:// custom URL protocol handler"
+      }
+    ]
+  },
+  "ui": {
+    "framework": "vue3",
+    "entry": "ui/dist/synth-ms-office.js",
+    "components": [
+      {
+        "tag": "synth-office-launcher",
+        "name": "OfficeLauncher",
+        "description": "Document launcher with Office application buttons"
+      },
+      {
+        "tag": "synth-document-sync",
+        "name": "DocumentSync",
+        "description": "Document sync status and management panel"
+      }
+    ]
+  }
+}

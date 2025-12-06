@@ -1,0 +1,22 @@
+# Java
+mcp-tools/target/
+*.class
+*.jar
+!mcp-tools/target/synth-ms-office-*.jar
+
+# Node
+ui/node_modules/
+ui/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temp
+*.log
+*.tmp
