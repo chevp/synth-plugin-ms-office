@@ -18,9 +18,9 @@ Synth Plugin for Microsoft Office integration. Open Word, Excel, and PowerPoint 
 └─────────────────────┘     └──────────────────────┘     └─────────────┘
          │                           │                          │
          │                           ▼                          │
-         │                  ┌──────────────────┐               │
-         │                  │  Temp Files      │               │
-         │                  │  + File Watcher  │◀──────────────┘
+         │                  ┌──────────────────┐                │
+         │                  │  Temp Files      │                │
+         │                  │  + File Watcher  │◀──────-────────┘
          │                  └──────────────────┘
          │                           │
          └───────────────────────────┘
